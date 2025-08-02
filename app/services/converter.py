@@ -9,6 +9,20 @@ import fitz  # PyMuPDF for PDF manipulation pdf to image conversion
 from docx2pdf import convert  # for converting Word documents to PDF
 import tempfile  # for creating temporary files
 import os  # for file path operations
+import base64  # for encoding and decoding base64 strings
+from xml.etree.cElementTree import (
+    Element,
+    SubElement,
+    tostring,
+)  # for XML parsing and manipulation
+import xml.etree.ElementTree as ET  # for XML parsing and manipulation
+
+# from cairosvg import svg2png  # for converting SVG to PNG
+# import svglib.svglib as svglib  # for SVG to PDF conversion
+from reportlab.graphics import renderPM  # for rendering SVG to PDF
+from cairosvg import svg2png, svg2pdf
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPM
 
 
 class FileConverter:
@@ -18,39 +32,12 @@ class FileConverter:
         self.temp_dir = tempfile.gettempdir()
 
     # conversion to PDF
+
+    # png to pdf
     def convert_png_to_pdf(self, png_file_path: bytes) -> bytes:
-        "function takes a png as bytes and returns a pdf as bytes"
-        try:
-            # load the image from memory
-            image = Image.open(io.BytesIO(png_file_path))
+        return self.convert_image_to_pdf(png_file_path, image_format="PNG")
 
-            # convert image to RGB if not already in that mode
-            if image.mode != "RGB":
-                image = image.convert("RGB")
-
-            # create PDF in memory
-            pdf_buffer = io.BytesIO()
-
-            # Get image dimensions
-            img_width, img_height = image.size
-
-            # Calculate page size to fit image
-            page_width = min(img_width, A4[0])
-            page_height = min(img_height, A4[1])
-
-            # Create PDF
-            c = canvas.Canvas(pdf_buffer, pagesize=(page_width, page_height))
-
-            # Add image to PDF
-            img_reader = ImageReader(io.BytesIO(png_file_path))
-            c.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
-            c.save()
-
-            return pdf_buffer.getvalue()
-
-        except Exception as e:
-            raise Exception(f"Error converting PNG to PDF: {str(e)}")
-
+    # jpg to pdf
     @staticmethod
     def convert_jpg_to_pdf(jpg_file_path: bytes) -> bytes:
         "function takes a jpg as bytes and returns a pdf as bytes"
@@ -72,6 +59,7 @@ class FileConverter:
         except Exception as e:
             raise Exception(f"Error converting JPG to PDF: {str(e)}")
 
+    # doc to pdf
     def convert_docx_to_pdf(self, docx_content: bytes) -> bytes:
         """Convert DOCX bytes to PDF bytes"""
         try:
@@ -103,6 +91,7 @@ class FileConverter:
         except Exception as e:
             raise Exception(f"Error converting DOCX to PDF: {str(e)}")
 
+    # image to pdf
     def convert_image_to_pdf(
         self, image_content: bytes, image_format: str = "PNG"
     ) -> bytes:
@@ -121,13 +110,24 @@ class FileConverter:
         except Exception as e:
             raise Exception(f"Error converting {image_format} to PDF: {str(e)}")
 
+    # svg to pdf
+    def convert_svg_to_pdf(self, svg_content: bytes) -> bytes:
+        """Convert SVG bytes to PDF bytes"""
+        try:
+            pdf_bytes = svg2pdf(bytestring=svg_content)
+            return pdf_bytes
+        except Exception as e:
+            raise Exception(f"Error converting SVG to PDF: {str(e)}")
+
     # conversion from PDF
+
+    # pdf to png
     def convert_pdf_to_png(self, pdf_content: bytes) -> list[bytes]:
         """Convert all PDF pages to PNG and return as a list of PNG bytes"""
         try:
             pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
             images = []
-            mat = fitz.Matrix(2.0, 2.0)  # Zoom for better quality
+            mat = fitz.Matrix(2.0, 2.0)
             for page_num in range(len(pdf_document)):
                 page = pdf_document.load_page(page_num)
                 pix = page.get_pixmap(matrix=mat)
@@ -138,6 +138,7 @@ class FileConverter:
         except Exception as e:
             raise Exception(f"Error converting PDF to PNG: {str(e)}")
 
+    # pdf to jpg
     def convert_pdf_to_jpg(self, pdf_content: bytes) -> list[bytes]:
         """Convert all PDF pages to JPG and return as a list of JPG bytes"""
         try:
@@ -153,3 +154,134 @@ class FileConverter:
                 return images
         except Exception as e:
             raise Exception(f"Error converting PDF to JPG: {str(e)}")
+
+        # conversion to svg
+
+    # pdf to image
+    # def convert_pdf_to_image(self, pdf_content: bytes) -> list[bytes]:
+
+    # pdf to docx
+
+    # pdf to svg
+
+    # svg conversion
+
+    # image to svg
+    def convert_image_to_svg(
+        self, image_content: bytes, image_format: str = "PNG"
+    ) -> bytes:
+        """Convert an image to SVG format"""
+        try:
+            image = Image.open(io.BytesIO(image_content))
+            width, height = image.size
+
+            # Convert image to base64 string
+            svg_buffer = io.BytesIO()
+
+            if image_format.upper() == "PNG":
+                image.save(svg_buffer, format="PNG")
+                mime_type = "image/png"
+            elif image_format.upper() in ["JPG", "JPEG"]:
+                if image.mode in ("RGBA", "LA", "P"):
+                    image = image.convert("RGB")
+                image.save(svg_buffer, format="JPEG")
+                mime_type = "image/jpeg"
+            else:
+                image.save(svg_buffer, format="PNG")
+                mime_type = "image/png"
+
+            img_base64 = base64.b64encode(svg_buffer.getvalue()).decode("utf-8")
+
+            # create SVG elements
+            svg = Element("svg")
+            svg.set("xmlns", "http://www.w3.org/2000/svg")
+            svg.set("xmlns:xlink", "http://www.w3.org/1999/xlink")
+            svg.set("width", str(width))
+            svg.set("height", str(height))
+            svg.set("viewBox", f"0 0 {width} {height}")
+            svg.set("version", "1.1")
+
+            # Add image element
+            image_elem = SubElement(svg, "image")
+            image_elem.set("x", "0")
+            image_elem.set("y", "0")
+            image_elem.set("width", str(width))
+            image_elem.set("height", str(height))
+            image_elem.set("href", f"data:{mime_type};base64,{img_base64}")
+            image_elem.set("preserveAspectRatio", "xMidYMid meet")
+
+            # convert SVG to bytes string with xml declaration
+            svg_string = '<?xml version="1.0" encoding="UTF-8"?>\n'
+            svg_string += tostring(svg, encoding="unicode")
+
+            return svg_string.encode("utf-8")
+
+        except Exception as e:
+            raise Exception(f"Error converting {image_format} to SVG: {str(e)}")
+
+    # png to svg
+    def convert_png_to_svg(self, png_content: bytes) -> bytes:
+        return self.convert_image_to_svg(png_content, image_format="PNG")
+
+    # jpg to svg
+    def convert_jpg_to_svg(self, jpg_content: bytes) -> bytes:
+        return self.convert_image_to_svg(jpg_content, image_format="JPG")
+
+    # svg to image
+    def convert_svg_to_image(
+        self,
+        svg_content: bytes,
+        output_format: str = "PNG",
+        width: int = None,
+        height: int = None,
+    ) -> bytes:
+        """Convert SVG to image format (PNG, JPG)"""
+        try:
+            # Method 1: Using cairosvg (recommended for PNG)
+            if output_format.upper() == "PNG":
+                png_data = svg2png(
+                    bytestring=svg_content, output_width=width, output_height=height
+                )
+                return png_data
+
+            # Method 2: Using cairosvg + PIL for other formats
+            else:
+                # First convert SVG to PNG
+                png_data = svg2png(
+                    bytestring=svg_content, output_width=width, output_height=height
+                )
+
+                # Then convert PNG to desired format
+                image = Image.open(io.BytesIO(png_data))
+
+                output_buffer = io.BytesIO()
+
+                if output_format.upper() in ["JPG", "JPEG"]:
+                    # Convert to RGB for JPEG (remove alpha channel)
+                    if image.mode in ("RGBA", "LA"):
+                        background = Image.new("RGB", image.size, (255, 255, 255))
+                        background.paste(
+                            image,
+                            mask=image.split()[-1] if image.mode == "RGBA" else None,
+                        )
+                        image = background
+                    image.save(output_buffer, format="JPEG", quality=95)
+                else:
+                    image.save(output_buffer, format=output_format.upper())
+
+                return output_buffer.getvalue()
+
+        except Exception as e:
+            raise Exception(f"Error converting SVG to {output_format}: {str(e)}")
+
+    # svg to png
+    def convert_svg_to_png(
+        self, svg_content: bytes, width: int = None, height: int = None
+    ) -> bytes:
+        return self.convert_svg_to_image(svg_content, "PNG", width, height)
+
+    # svg to jpg
+    def convert_svg_to_jpg(
+        self, svg_content: bytes, width: int = None, height: int = None
+    ) -> bytes:
+        return self.convert_svg_to_image(svg_content, "JPG", width, height)
