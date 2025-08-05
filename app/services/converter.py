@@ -23,6 +23,11 @@ from reportlab.graphics import renderPM  # for rendering SVG to PDF
 from cairosvg import svg2png, svg2pdf
 from svglib.svglib import svg2rlg
 from reportlab.graphics import renderPM
+from docx import Document
+from moviepy import VideoFileClip
+
+# from pydub import AudioSegment
+import pikepdf  # for PDF manipulation and compression
 
 
 class FileConverter:
@@ -31,8 +36,6 @@ class FileConverter:
     def __init__(self):
         self.temp_dir = tempfile.gettempdir()
 
-    # conversion to PDF
-
     # png to pdf
     def convert_png_to_pdf(self, png_file_path: bytes) -> bytes:
         return self.convert_image_to_pdf(png_file_path, image_format="PNG")
@@ -40,7 +43,6 @@ class FileConverter:
     # jpg to pdf
     @staticmethod
     def convert_jpg_to_pdf(jpg_file_path: bytes) -> bytes:
-        "function takes a jpg as bytes and returns a pdf as bytes"
         try:
             image = Image.open(io.BytesIO(jpg_file_path))
 
@@ -61,7 +63,6 @@ class FileConverter:
 
     # doc to pdf
     def convert_docx_to_pdf(self, docx_content: bytes) -> bytes:
-        """Convert DOCX bytes to PDF bytes"""
         try:
             # Create temporary files
             with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as temp_docx:
@@ -82,7 +83,6 @@ class FileConverter:
                 return pdf_content
 
             finally:
-                # Clean up temporary files
                 if os.path.exists(temp_docx_path):
                     os.unlink(temp_docx_path)
                 if os.path.exists(temp_pdf_path):
@@ -95,7 +95,6 @@ class FileConverter:
     def convert_image_to_pdf(
         self, image_content: bytes, image_format: str = "PNG"
     ) -> bytes:
-        """Generic method to convert any image format to PDF"""
         try:
             image = Image.open(io.BytesIO(image_content))
 
@@ -112,18 +111,14 @@ class FileConverter:
 
     # svg to pdf
     def convert_svg_to_pdf(self, svg_content: bytes) -> bytes:
-        """Convert SVG bytes to PDF bytes"""
         try:
             pdf_bytes = svg2pdf(bytestring=svg_content)
             return pdf_bytes
         except Exception as e:
             raise Exception(f"Error converting SVG to PDF: {str(e)}")
 
-    # conversion from PDF
-
     # pdf to png
     def convert_pdf_to_png(self, pdf_content: bytes) -> list[bytes]:
-        """Convert all PDF pages to PNG and return as a list of PNG bytes"""
         try:
             pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
             images = []
@@ -133,14 +128,13 @@ class FileConverter:
                 pix = page.get_pixmap(matrix=mat)
                 png_data = pix.tobytes("png")
                 images.append(png_data)
-                pdf_document.close()
-                return images
+            pdf_document.close()
+            return images
         except Exception as e:
             raise Exception(f"Error converting PDF to PNG: {str(e)}")
 
     # pdf to jpg
     def convert_pdf_to_jpg(self, pdf_content: bytes) -> list[bytes]:
-        """Convert all PDF pages to JPG and return as a list of JPG bytes"""
         try:
             pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
             images = []
@@ -150,27 +144,59 @@ class FileConverter:
                 pix = page.get_pixmap(matrix=mat)
                 jpg_data = pix.tobytes("jpg")
                 images.append(jpg_data)
-                pdf_document.close()
-                return images
+            pdf_document.close()
+            return images
         except Exception as e:
             raise Exception(f"Error converting PDF to JPG: {str(e)}")
 
-        # conversion to svg
-
     # pdf to image
-    # def convert_pdf_to_image(self, pdf_content: bytes) -> list[bytes]:
+    def convert_pdf_to_image(
+        self, pdf_content: bytes, image_format: str = "PNG"
+    ) -> list[bytes]:
+        supported_formats = ["PNG", "JPG", "JPEG"]
+        fmt = image_format.lower()
+        if fmt == "jpeg":
+            fmt = "jpg"
+        if fmt.upper() not in supported_formats:
+            raise ValueError(f"Unsupported image format: {image_format}")
+
+        try:
+            pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
+            images = []
+            mat = fitz.Matrix(2.0, 2.0)
+            for page_num in range(len(pdf_document)):
+                page = pdf_document.load_page(page_num)
+                pix = page.get_pixmap(matrix=mat)
+                img_data = pix.tobytes(fmt)
+                images.append(img_data)
+            pdf_document.close()
+            return images
+        except Exception as e:
+            raise Exception(f"Error converting PDF to image: {str(e)}")
 
     # pdf to docx
+    def convert_pdf_to_docx(self, pdf_content: bytes) -> bytes:
+        try:
+            pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
 
-    # pdf to svg
-
-    # svg conversion
+            doc = Document()
+            for page_num in range(len(pdf_document)):
+                page = pdf_document.load_page(page_num)
+                text = page.get_text()
+                doc.add_paragraph(text)
+                doc.add_page_break()
+            pdf_document.close()
+            docx_stream = io.BytesIO()
+            doc.save(docx_stream)
+            docx_stream.seek(0)
+            return docx_stream.read()
+        except Exception as e:
+            raise Exception(f"Error converting PDF to DOCX: {str(e)}")
 
     # image to svg
     def convert_image_to_svg(
         self, image_content: bytes, image_format: str = "PNG"
     ) -> bytes:
-        """Convert an image to SVG format"""
         try:
             image = Image.open(io.BytesIO(image_content))
             width, height = image.size
@@ -235,23 +261,16 @@ class FileConverter:
         width: int = None,
         height: int = None,
     ) -> bytes:
-        """Convert SVG to image format (PNG, JPG)"""
         try:
-            # Method 1: Using cairosvg (recommended for PNG)
             if output_format.upper() == "PNG":
                 png_data = svg2png(
                     bytestring=svg_content, output_width=width, output_height=height
                 )
                 return png_data
-
-            # Method 2: Using cairosvg + PIL for other formats
             else:
-                # First convert SVG to PNG
                 png_data = svg2png(
                     bytestring=svg_content, output_width=width, output_height=height
                 )
-
-                # Then convert PNG to desired format
                 image = Image.open(io.BytesIO(png_data))
 
                 output_buffer = io.BytesIO()
@@ -285,3 +304,109 @@ class FileConverter:
         self, svg_content: bytes, width: int = None, height: int = None
     ) -> bytes:
         return self.convert_svg_to_image(svg_content, "JPG", width, height)
+
+    # mp4 to mp3
+    def convert_mp4_to_mp3(self, mp4_content: bytes) -> bytes:
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video:
+                temp_video.write(mp4_content)
+                temp_video_path = temp_video.name
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio:
+                temp_audio_path = temp_audio.name
+
+            video = VideoFileClip(temp_video_path)
+            video.audio.write_audiofile(temp_audio_path)
+            video.close()
+
+            with open(temp_audio_path, "rb") as f:
+                mp3_bytes = f.read()
+
+            os.remove(temp_video_path)
+            os.remove(temp_audio_path)
+
+            return mp3_bytes
+
+        except Exception as e:
+            raise Exception(f"Error converting MP4 to MP3: {str(e)}")
+
+
+class FileCompressor:
+
+    def __init__(self, compression_percentage: int):
+        self.quality = max(10, 100 - compression_percentage)
+
+    def compress_image(self, file: bytes) -> bytes:
+        with tempfile.NamedTemporaryFile(delete=False) as temp_in:
+            temp_in.write(file)
+            temp_in.flush()
+
+            img = Image.open(temp_in.name)
+            format = img.format
+
+            with tempfile.NamedTemporaryFile(
+                suffix=f".{format.lower()}", delete=False
+            ) as temp_out:
+                if format.upper() == "JPEG":
+                    img.save(temp_out.name, format, quality=self.quality)
+                elif format.upper() == "PNG":
+                    compress_level = int((100 - self.quality) / 10)
+                    img.save(temp_out.name, format, compress_level=compress_level)
+                else:
+                    img.save(temp_out.name, format)
+                temp_out.seek(0)
+                return temp_out.read()
+
+    # def compress_audio(self, file: bytes) -> bytes:
+    #     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_in:
+    #         temp_in.write(file)
+    #         temp_in.flush()
+
+    #         audio = AudioSegment.from_file(temp_in)
+
+    #         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_out:
+    #             audio.export(temp_out.name, format="mp3", bitrate=f"{self.quality}k")
+    #             temp_out.seek(0)
+    #             return temp_out.read()
+
+    def compress_video(self, file: bytes) -> bytes:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_in:
+            temp_in.write(file)
+            temp_in.flush()
+
+            video = VideoFileClip(temp_in.name)
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as temp_out:
+                video.write_videofile(
+                    temp_out.name,
+                    bitrate=f"{self.quality*1000}k",
+                    audio_codec="aac",
+                    logger=None,
+                )
+                return open(temp_out.name, "rb").read()
+
+    def compress_pdf(self, file: bytes) -> bytes:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_in:
+            temp_in.write(file)
+            temp_in.flush()
+
+            with pikepdf.open(temp_in.name) as pdf:
+                with tempfile.NamedTemporaryFile(
+                    suffix=".pdf", delete=False
+                ) as temp_out:
+                    pdf.save(
+                        temp_out.name,
+                        # optimize_version=True,
+                    )
+                    return open(temp_out.name, "rb").read()
+
+    def compress(self, file: bytes, mime_type: str) -> bytes:
+        if mime_type.startswith("image/"):
+            return self.compress_image(file)
+        elif mime_type.startswith("audio/"):
+            return self.compress_audio(file)
+        elif mime_type.startswith("video/"):
+            return self.compress_video(file)
+        elif mime_type == "application/pdf":
+            return self.compress_pdf(file)
+        else:
+            raise ValueError("Unsupported file type")

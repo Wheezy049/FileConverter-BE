@@ -35,14 +35,14 @@ def allConvert():
             "/api/v1/convert/svg-to-png",
             "/api/v1/convert/svg-to-jpg",
             "/api/v1/convert/svg-to-pdf",
-        ],
-        "Incoming endpoints": [
             "/api/v1/convert/pdf-to-image",
             "/api/v1/convert/pdf-to-docx",
-            "/api/v1/convert/pdf-to-svg",
+            # "/api/v1/convert/pdf-to-svg",
             "/api/v1/convert/svg-to-image",
             "/api/v1/convert/mp4-to-mp3",
-            "/api/v1/convert/image-to-gif",
             "compression of all accepted formats of files",
+        ],
+        "Incoming endpoints": [
+            "/api/v1/convert/image-to-gif",
         ],
     }

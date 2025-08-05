@@ -1,20 +1,19 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from fastapi.responses import StreamingResponse
 from typing import Optional
 import io
 import os
 import zipfile
-from app.services.converter import FileConverter
+from app.services.converter import FileConverter, FileCompressor
+import mimetypes
 
 router = APIRouter()
 converter = FileConverter()
 
 
-# conversion to pdf
 # png to pdf
 @router.post("/convert/png-to-pdf")
 async def png_to_pdf(file: UploadFile = File(...)):
-    """Convert PNG image to PDF"""
     if not file.content_type.startswith("image/png"):
         raise HTTPException(status_code=400, detail="File must be a PNG image")
 
@@ -42,7 +41,6 @@ async def png_to_pdf(file: UploadFile = File(...)):
 # jpg to pdf
 @router.post("/convert/jpg-to-pdf")
 async def jpg_to_pdf(file: UploadFile = File(...)):
-    """Convert JPG image to PDF"""
     if not file.content_type.startswith("image/jpeg"):
         raise HTTPException(status_code=400, detail="File must be a JPG image")
 
@@ -135,9 +133,6 @@ async def svg_to_pdf(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
 
-# conversion from pdf
-
-
 # pdf to jpg
 @router.post("/convert/pdf-to-png")
 async def pdf_to_png(file: UploadFile = File(...)):
@@ -215,12 +210,73 @@ async def pdf_to_jpg(file: UploadFile = File(...)):
 
 
 # pdf to docs
+@router.post("/connvert/pdf-to-docx")
+async def pdf_to_docx(file: UploadFile = File(...)):
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="File must be a PDF")
+
+    try:
+        file_content = await file.read()
+        original_filename = os.path.splitext(file.filename)[0]
+        output_filename = f"{original_filename}.docx"
+
+        docx_byte = converter.convert_pdf_to_docx(file_content)
+        return StreamingResponse(
+            io.BytesIO(docx_byte),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+
 
 # pdf to image
+@router.post("/convert/pdf-to-img")
+async def pdf_to_img(file: UploadFile = File(...), output_format: str = Form(...)):
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="File must be a PDF")
+
+    output_format = output_format.upper()
+    if output_format not in ["PNG", "JPEG", "JPG"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported image format. Only PNG or JPEG are supported.",
+        )
+
+    try:
+        file_content = await file.read()
+        original_name = os.path.splitext(file.filename)[0]
+        images = converter.convert_pdf_to_image(file_content, output_format)
+
+        if len(images) == 1:
+            output_filename = f"{original_name}_page_1.{output_format.lower()}"
+            return StreamingResponse(
+                io.BytesIO(images[0]),
+                media_type=f"image/{output_format.lower()}",
+                headers={
+                    "Content-Disposition": f"attachment; filename={output_filename}"
+                },
+            )
+        else:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w") as zipf:
+                for i, img_bytes in enumerate(images, start=1):
+                    zipf.writestr(
+                        f"{original_name}_page_{i}.{output_format.lower()}", img_bytes
+                    )
+            zip_buffer.seek(0)
+            return StreamingResponse(
+                zip_buffer,
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": f"attachment; filename={original_name}_images.zip"
+                },
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+
 
 # pdf to svg
-
-# svg conversion
 
 
 # image to svg
@@ -294,24 +350,33 @@ async def jpg_to_svg(file: UploadFile = File(...)):
 
 
 # svg to image
-# @router.post("/convert/svg-to-image")
-# async def svg_to_image(file: UploadFile = File(...)):
-#     if file.content_type != "image/svg+xml":
-#         raise HTTPException(status_code=400, detail="File must be an SVG image")
+@router.post("/convert/svg-to-img")
+async def svg_to_img(file: UploadFile = File(...), output_format: str = Form(...)):
+    if file.content_type != "image/svg+xml":
+        raise HTTPException(status_code=400, detail="File must be an SVG image")
 
-#     try:
-#         original_name = os.path.splitext(file.filename)[0]
-#         output_filename = f"{original_name}.png"
-#         file_content = await file.read()
-#         png_content = converter.convert_svg_to_png(file_content)
+    output_format = output_format.upper()
+    supported_format = ["PNG", "JPEG", "JPG"]
 
-#         return StreamingResponse(
-#             io.BytesIO(png_content),
-#             media_type="image/png",
-#             headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-#         )
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+    if output_format not in supported_format:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported image format. Only PNG or JPEG are supported.",
+        )
+
+    try:
+        original_name = os.path.splitext(file.filename)[0]
+        output_filename = f"{original_name}.{output_format.lower()}"
+        file_content = await file.read()
+        png_content = converter.convert_svg_to_image(file_content, output_format)
+
+        return StreamingResponse(
+            io.BytesIO(png_content),
+            media_type=f"image/{output_format.lower()}",
+            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
 
 # svg to png
@@ -354,3 +419,53 @@ def svg_to_jpg(file: UploadFile = File(...)):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+
+
+# mp4 to mp3
+@router.post("/convert/mp4-to-mp3")
+async def mp4_to_mp3(file: UploadFile = File(...)):
+    if not file.filename.endswith(".mp4"):
+        raise HTTPException(status_code=400, detail="Only MP4 files are supported.")
+
+    try:
+        file_content = await file.read()
+        mp3_bytes = converter.convert_mp4_to_mp3(file_content)
+
+        output_filename = file.filename.replace(".mp4", ".mp3")
+        return StreamingResponse(
+            io.BytesIO(mp3_bytes),
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+
+
+# file compressor
+@router.post("/compress")
+async def compress_file(file: UploadFile = File(...), percent: int = Form(...)):
+    contents = await file.read()
+
+    if len(contents) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File exceeds 25MB limit")
+
+    mime_type, _ = mimetypes.guess_type(file.filename)
+    if mime_type is None or not any(
+        mime_type.startswith(typ)
+        for typ in ["image", "audio", "video", "application/pdf"]
+    ):
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    try:
+        compressor = FileCompressor(compression_percentage=percent)
+        compressed = compressor.compress(contents, mime_type)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return StreamingResponse(
+        iter([compressed]),
+        media_type=mime_type,
+        headers={
+            "Content-Disposition": f"attachment; filename=compressed_{file.filename}"
+        },
+    )
