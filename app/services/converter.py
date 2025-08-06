@@ -383,21 +383,44 @@ class FileCompressor:
                     logger=None,
                 )
                 return open(temp_out.name, "rb").read()
+            
 
     def compress_pdf(self, file: bytes) -> bytes:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_in:
-            temp_in.write(file)
-            temp_in.flush()
-
-            with pikepdf.open(temp_in.name) as pdf:
-                with tempfile.NamedTemporaryFile(
-                    suffix=".pdf", delete=False
-                ) as temp_out:
-                    pdf.save(
-                        temp_out.name,
-                        # optimize_version=True,
-                    )
-                    return open(temp_out.name, "rb").read()
+        temp_in_path = None
+        temp_out_path = None
+    
+        try:
+           with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_in:
+               temp_in.write(file)
+               temp_in_path = temp_in.name
+        
+           temp_out_fd, temp_out_path = tempfile.mkstemp(suffix=".pdf")
+           os.close(temp_out_fd)
+        
+           with pikepdf.open(temp_in_path) as pdf:
+               pdf.save(
+                  temp_out_path,
+                  compress_streams=True,
+                  object_stream_mode=pikepdf.ObjectStreamMode.generate
+                )
+        
+           with open(temp_out_path, "rb") as f:
+                compressed_data = f.read()
+        
+           return compressed_data
+    
+        finally:
+             if temp_in_path and os.path.exists(temp_in_path):
+                try:
+                    os.unlink(temp_in_path)
+                except PermissionError:
+                    pass 
+        
+             if temp_out_path and os.path.exists(temp_out_path):
+                 try:
+                     os.unlink(temp_out_path)
+                 except PermissionError:
+                     pass
 
     def compress(self, file: bytes, mime_type: str) -> bytes:
         if mime_type.startswith("image/"):

@@ -446,8 +446,8 @@ async def mp4_to_mp3(file: UploadFile = File(...)):
 async def compress_file(file: UploadFile = File(...), percent: int = Form(...)):
     contents = await file.read()
 
-    if len(contents) > 25 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File exceeds 25MB limit")
+    # if len(contents) > 100 * 1024 * 1024:
+    #     raise HTTPException(status_code=400, detail="File exceeds 100MB limit")
 
     mime_type, _ = mimetypes.guess_type(file.filename)
     if mime_type is None or not any(
