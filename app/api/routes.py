@@ -6,9 +6,12 @@ import os
 import zipfile
 from app.services.converter import FileConverter, FileCompressor
 import mimetypes
+import uuid
 
 router = APIRouter()
 converter = FileConverter()
+
+Temp_Storage = {}
 
 
 # png to pdf
@@ -24,16 +27,24 @@ async def png_to_pdf(file: UploadFile = File(...)):
 
         # Read the uploaded file
         png_content = await file.read()
+        file_id = str(uuid.uuid4())
 
         # Convert using the converter
         pdf_content = converter.convert_png_to_pdf(png_content)
 
+        Temp_Storage[file_id] = {
+            "content": pdf_content,
+            "media_type": "application/pdf",
+            "filename": f"{output_filename}",
+        }
+
         # Return as streaming response
-        return StreamingResponse(
-            io.BytesIO(pdf_content),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -47,16 +58,23 @@ async def jpg_to_pdf(file: UploadFile = File(...)):
     try:
         original_name = os.path.splitext(file.filename)[0]
         output_filename = f"{original_name}.pdf"
-
+        file_id = str(uuid.uuid4())
         jpg_content = await file.read()
 
         pdf_content = converter.convert_jpg_to_pdf(jpg_content)
 
-        return StreamingResponse(
-            io.BytesIO(pdf_content),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        Temp_Storage[file_id] = {
+            "content": pdf_content,
+            "media_type": "application/pdf",
+            "filename": f"{output_filename}",
+        }
+
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -75,17 +93,25 @@ async def img_to_pdf(file: UploadFile = File(...)):
     try:
         original_name = os.path.splitext(file.filename)[0]
         output_filename = f"{original_name}.pdf"
+        file_id = str(uuid.uuid4())
         pdf_content = converter.convert_image_to_pdf(
             await file.read(), image_format=image_format
         )
+
+        Temp_Storage[file_id] = {
+            "content": pdf_content,
+            "media_type": "application/pdf",
+            "filename": f"{output_filename}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    return StreamingResponse(
-        io.BytesIO(pdf_content),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-    )
+    return {
+        "file_id": file_id,
+        "filename": output_filename,
+        "message": "File Converted successfully",
+        "download_url": f"/api/v1/download/{file_id}",
+    }
 
 
 # doc to pdf
@@ -98,15 +124,22 @@ async def docx_to_pdf(file: UploadFile = File(...)):
     try:
         original_name = os.path.splitext(file.filename)[0]
         output_filename = f"{original_name}.pdf"
-
+        file_id = str(uuid.uuid4())
         file_content = await file.read()
         pdf_content = converter.convert_docx_to_pdf(file_content)
 
-        return StreamingResponse(
-            io.BytesIO(pdf_content),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        Temp_Storage[file_id] = {
+            "content": pdf_content,
+            "media_type": "application/pdf",
+            "filename": f"{output_filename}",
+        }
+
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -120,15 +153,22 @@ async def svg_to_pdf(file: UploadFile = File(...)):
     try:
         original_name = os.path.splitext(file.filename)[0]
         output_filename = f"{original_name}.pdf"
-
+        file_id = str(uuid.uuid4())
         svg_content = await file.read()
         pdf_content = converter.convert_svg_to_pdf(svg_content)
 
-        return StreamingResponse(
-            io.BytesIO(pdf_content),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        Temp_Storage[file_id] = {
+            "content": pdf_content,
+            "media_type": "application/pdf",
+            "filename": f"{output_filename}",
+        }
+
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -141,19 +181,27 @@ async def pdf_to_png(file: UploadFile = File(...)):
 
     try:
         file_content = await file.read()
+        if len(file_content) > 100 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File exceeds 100MB limit")
+        file_id = str(uuid.uuid4())
         images = converter.convert_pdf_to_png(file_content)
 
         if len(images) == 1:
             # Single page: return image directly
             original_name = os.path.splitext(file.filename)[0]
             output_filename = f"{original_name}_page_1.png"
-            return StreamingResponse(
-                io.BytesIO(images[0]),
-                media_type="image/png",
-                headers={
-                    "Content-Disposition": f"attachment; filename={output_filename}"
-                },
-            )
+            Temp_Storage[file_id] = {
+                "content": images,
+                "media_type": "image/png",
+                "filename": f"{output_filename}",
+            }
+            return {
+                "file_id": file_id,
+                "filename": output_filename,
+                "message": "File Converted successfully",
+                "download_url": f"/api/v1/download/{file_id}",
+            }
+
         else:
             # Multiple pages: return a ZIP of images
             zip_buffer = io.BytesIO()
@@ -162,11 +210,17 @@ async def pdf_to_png(file: UploadFile = File(...)):
                     zipf.writestr(f"{original_name}_page_{i}.png", img_bytes)
             zip_buffer.seek(0)
             zip_filename = f"{original_name}_images.zip"
-            return StreamingResponse(
-                zip_buffer,
-                media_type="application/zip",
-                headers={"Content-Disposition": f"attachment; filename={zip_filename}"},
-            )
+            Temp_Storage[file_id] = {
+                "content": images,
+                "media_type": "application/zip",
+                "filename": f"{zip_filename}",
+            }
+            return {
+                "file_id": file_id,
+                "filename": zip_filename,
+                "message": "File Converted successfully",
+                "download_url": f"/api/v1/download/{file_id}",
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -179,19 +233,27 @@ async def pdf_to_jpg(file: UploadFile = File(...)):
 
     try:
         file_content = await file.read()
+        if len(file_content) > 100 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File exceeds 100MB limit")
+        file_id = str(uuid.uuid4())
         images = converter.convert_pdf_to_jpg(file_content)
 
         if len(images) == 1:
             # Single page: return image directly
             original_name = os.path.splitext(file.filename)[0]
             output_filename = f"{original_name}_page_1.jpg"
-            return StreamingResponse(
-                io.BytesIO(images[0]),
-                media_type="image/jpeg",
-                headers={
-                    "Content-Disposition": f"attachment; filename={output_filename}"
-                },
-            )
+            Temp_Storage[file_id] = {
+                "content": images,
+                "media_type": "image/png",
+                "filename": f"{output_filename}",
+            }
+            return {
+                "file_id": file_id,
+                "filename": output_filename,
+                "message": "File Converted successfully",
+                "download_url": f"/api/v1/download/{file_id}",
+            }
+
         else:
             # Multiple pages: return a ZIP of images
             zip_buffer = io.BytesIO()
@@ -200,11 +262,17 @@ async def pdf_to_jpg(file: UploadFile = File(...)):
                     zipf.writestr(f"{original_name}_page_{i}.jpg", img_bytes)
             zip_buffer.seek(0)
             zip_filename = f"{original_name}_images.zip"
-            return StreamingResponse(
-                zip_buffer,
-                media_type="application/zip",
-                headers={"Content-Disposition": f"attachment; filename={zip_filename}"},
-            )
+            Temp_Storage[file_id] = {
+                "content": images,
+                "media_type": "application/zip",
+                "filename": f"{zip_filename}",
+            }
+            return {
+                "file_id": file_id,
+                "filename": zip_filename,
+                "message": "File Converted successfully",
+                "download_url": f"/api/v1/download/{file_id}",
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -217,15 +285,23 @@ async def pdf_to_docx(file: UploadFile = File(...)):
 
     try:
         file_content = await file.read()
+        if len(file_content) > 100 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File exceeds 100MB limit")
         original_filename = os.path.splitext(file.filename)[0]
         output_filename = f"{original_filename}.docx"
-
+        file_id = str(uuid.uuid4())
         docx_byte = converter.convert_pdf_to_docx(file_content)
-        return StreamingResponse(
-            io.BytesIO(docx_byte),
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        Temp_Storage[file_id] = {
+            "content": docx_byte,
+            "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "filename": f"{output_filename}",
+        }
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -245,18 +321,25 @@ async def pdf_to_img(file: UploadFile = File(...), output_format: str = Form(...
 
     try:
         file_content = await file.read()
+        if len(file_content) > 100 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File exceeds 100MB limit")
         original_name = os.path.splitext(file.filename)[0]
+        file_id = str(uuid.uuid4())
         images = converter.convert_pdf_to_image(file_content, output_format)
 
         if len(images) == 1:
             output_filename = f"{original_name}_page_1.{output_format.lower()}"
-            return StreamingResponse(
-                io.BytesIO(images[0]),
-                media_type=f"image/{output_format.lower()}",
-                headers={
-                    "Content-Disposition": f"attachment; filename={output_filename}"
-                },
-            )
+            Temp_Storage[file_id] = {
+                "content": images,
+                "media_type": f"image/{output_format.lower()}",
+                "filename": f"{output_filename}",
+            }
+            return {
+                "file_id": file_id,
+                "filename": output_filename,
+                "message": "File Converted successfully",
+                "download_url": f"/api/v1/download/{file_id}",
+            }
         else:
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w") as zipf:
@@ -265,13 +348,17 @@ async def pdf_to_img(file: UploadFile = File(...), output_format: str = Form(...
                         f"{original_name}_page_{i}.{output_format.lower()}", img_bytes
                     )
             zip_buffer.seek(0)
-            return StreamingResponse(
-                zip_buffer,
-                media_type="application/zip",
-                headers={
-                    "Content-Disposition": f"attachment; filename={original_name}_images.zip"
-                },
-            )
+            Temp_Storage[file_id] = {
+                "content": images,
+                "media_type": "application/zip",
+                "filename": f"{original_name}_images.zip",
+            }
+            return {
+                "file_id": file_id,
+                "filename": f"{original_name}_images.zip",
+                "message": "File Converted successfully",
+                "download_url": f"/api/v1/download/{file_id}",
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -286,6 +373,7 @@ async def img_to_svg(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="File must be an image")
     try:
         original_name = os.path.splitext(file.filename)[0]
+        file_id = str(uuid.uuid4())
         output_filename = f"{original_name}.svg"
         file_content = await file.read()
         if "png" in file.content_type:
@@ -296,12 +384,18 @@ async def img_to_svg(file: UploadFile = File(...)):
             image_format = "PNG"
 
         svg_content = converter.convert_image_to_svg(file_content, image_format)
+        Temp_Storage[file_id] = {
+            "content": svg_content,
+            "media_type": "image/svg+xml",
+            "filename": f"{output_filename}",
+        }
 
-        return StreamingResponse(
-            io.BytesIO(svg_content),
-            media_type="image/svg+xml",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -315,14 +409,21 @@ async def png_to_svg(file: UploadFile = File(...)):
     try:
         original_name = os.path.splitext(file.filename)[0]
         output_filename = f"{original_name}.svg"
+        file_id = str(uuid.uuid4())
         file_content = await file.read()
         svg_content = converter.convert_png_to_svg(file_content)
+        Temp_Storage[file_id] = {
+            "content": svg_content,
+            "media_type": "image/svg+xml",
+            "filename": f"{output_filename}",
+        }
 
-        return StreamingResponse(
-            io.BytesIO(svg_content),
-            media_type="image/svg+xml",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -336,15 +437,21 @@ async def jpg_to_svg(file: UploadFile = File(...)):
     try:
         original_name = os.path.splitext(file.filename)[0]
         output_filename = f"{original_name}.svg"
-
+        file_id = str(uuid.uuid4())
         file_content = await file.read()
         svg_content = converter.convert_jpg_to_svg(file_content)
+        Temp_Storage[file_id] = {
+            "content": svg_content,
+            "media_type": "application/zip",
+            "filename": f"{output_filename}",
+        }
 
-        return StreamingResponse(
-            io.BytesIO(svg_content),
-            media_type="image/svg+xml",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -368,13 +475,20 @@ async def svg_to_img(file: UploadFile = File(...), output_format: str = Form(...
         original_name = os.path.splitext(file.filename)[0]
         output_filename = f"{original_name}.{output_format.lower()}"
         file_content = await file.read()
+        file_id = str(uuid.uuid4())
         png_content = converter.convert_svg_to_image(file_content, output_format)
+        Temp_Storage[file_id] = {
+            "content": png_content,
+            "media_type": f"image/{output_format.lower()}",
+            "filename": f"{output_filename}",
+        }
 
-        return StreamingResponse(
-            io.BytesIO(png_content),
-            media_type=f"image/{output_format.lower()}",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -389,13 +503,21 @@ def svg_to_png(file: UploadFile = File(...)):
         original_name = os.path.splitext(file.filename)[0]
         output_filename = f"{original_name}.png"
         svg_content = file.file.read()
+        file_id = str(uuid.uuid4)
         png_content = converter.convert_svg_to_png(svg_content)
 
-        return StreamingResponse(
-            io.BytesIO(png_content),
-            media_type="image/png",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        Temp_Storage[file_id] = {
+            "content": png_content,
+            "media_type": "image/png",
+            "filename": f"{output_filename}",
+        }
+
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -410,13 +532,20 @@ def svg_to_jpg(file: UploadFile = File(...)):
         original_name = os.path.splitext(file.filename)[0]
         output_filename = f"{original_name}.jpg"
         svg_content = file.file.read()
+        file_id = str(uuid.uuid4())
         jpg_content = converter.convert_svg_to_jpg(svg_content)
+        Temp_Storage[file_id] = {
+            "content": jpg_content,
+            "media_type": "application/zip",
+            "filename": f"{output_filename}",
+        }
 
-        return StreamingResponse(
-            io.BytesIO(jpg_content),
-            media_type="image/jpeg",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -429,14 +558,25 @@ async def mp4_to_mp3(file: UploadFile = File(...)):
 
     try:
         file_content = await file.read()
+        if len(file_content) > 300 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File exceeds 300MB limit")
+        file_id = str(uuid.uuid4())
         mp3_bytes = converter.convert_mp4_to_mp3(file_content)
 
         output_filename = file.filename.replace(".mp4", ".mp3")
-        return StreamingResponse(
-            io.BytesIO(mp3_bytes),
-            media_type="audio/mpeg",
-            headers={"Content-Disposition": f"attachment; filename={output_filename}"},
-        )
+
+        Temp_Storage[file_id] = {
+            "content": mp3_bytes,
+            "media_type": "application/zip",
+            "filename": f"{output_filename}",
+        }
+
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
@@ -446,9 +586,9 @@ async def mp4_to_mp3(file: UploadFile = File(...)):
 async def compress_file(file: UploadFile = File(...), percent: int = Form(...)):
     contents = await file.read()
 
-    # if len(contents) > 100 * 1024 * 1024:
-    #     raise HTTPException(status_code=400, detail="File exceeds 100MB limit")
-
+    if len(contents) > 500 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File exceeds 500MB limit")
+    file_id = str(uuid.uuid4())
     mime_type, _ = mimetypes.guess_type(file.filename)
     if mime_type is None or not any(
         mime_type.startswith(typ)
@@ -462,10 +602,30 @@ async def compress_file(file: UploadFile = File(...), percent: int = Form(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    Temp_Storage[file_id] = {
+        "content": compressed,
+        "media_type": mime_type,
+        "filename": f"compressed_{file.filename}",
+    }
+
+    return {
+        "file_id": file_id,
+        "message": "File compressed successfully",
+        "filename": f"compressed_{file.filename}",
+        "download_url": f"/api/v1/download/{file_id}",
+    }
+
+
+@router.post("/download/{file_id}")
+async def download_file(file_id: str):
+    file_data = Temp_Storage.get(file_id)
+    if not file_data:
+        raise HTTPException(status_code=404, detail="File not found")
+
     return StreamingResponse(
-        iter([compressed]),
-        media_type=mime_type,
+        io.BytesIO(file_data["content"]),
+        media_type=file_data["media_type"],
         headers={
-            "Content-Disposition": f"attachment; filename=compressed_{file.filename}"
+            "Content-Disposition": f"attachment; filename={file_data['filename']}"
         },
     )
