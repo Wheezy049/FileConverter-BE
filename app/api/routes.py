@@ -553,21 +553,23 @@ def svg_to_jpg(file: UploadFile = File(...)):
 # mp4 to mp3
 @router.post("/convert/mp4-to-mp3")
 async def mp4_to_mp3(file: UploadFile = File(...)):
-    if not file.filename.endswith(".mp4"):
-        raise HTTPException(status_code=400, detail="Only MP4 files are supported.")
+    allowed_extensions = [".mp4", ".mov", ".avi", ".mkv", ".flv", ".wmv", ".webm"]
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in allowed_extensions:
+        raise HTTPException(status_code=400, detail=f"Only video files with extensions {allowed_extensions} are supported.")
 
     try:
         file_content = await file.read()
         if len(file_content) > 300 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="File exceeds 300MB limit")
         file_id = str(uuid.uuid4())
-        mp3_bytes = converter.convert_mp4_to_mp3(file_content)
+        mp3_bytes = converter.convert_mp4_to_mp3(file_content, file_ext)
 
-        output_filename = file.filename.replace(".mp4", ".mp3")
+        output_filename = os.path.splitext(file.filename)[0] + ".mp3"
 
         Temp_Storage[file_id] = {
             "content": mp3_bytes,
-            "media_type": "application/zip",
+            "media_type": "audio/mpeg",
             "filename": f"{output_filename}",
         }
 
@@ -598,7 +600,7 @@ async def compress_file(file: UploadFile = File(...), percent: int = Form(...)):
 
     try:
         compressor = FileCompressor(compression_percentage=percent)
-        compressed = compressor.compress(contents, mime_type)
+        compressed = compressor.compress(contents, mime_type, file.filename)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

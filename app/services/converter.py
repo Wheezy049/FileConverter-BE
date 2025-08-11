@@ -306,9 +306,9 @@ class FileConverter:
         return self.convert_svg_to_image(svg_content, "JPG", width, height)
 
     # mp4 to mp3
-    def convert_mp4_to_mp3(self, mp4_content: bytes) -> bytes:
+    def convert_mp4_to_mp3(self, mp4_content: bytes, ext: str) -> bytes:
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_video:
                 temp_video.write(mp4_content)
                 temp_video_path = temp_video.name
 
@@ -369,13 +369,13 @@ class FileCompressor:
     #             temp_out.seek(0)
     #             return temp_out.read()
 
-    def compress_video(self, file: bytes) -> bytes:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_in:
+    def compress_video(self, file: bytes, ext: str) -> bytes:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as temp_in:
             temp_in.write(file)
             temp_in.flush()
 
             video = VideoFileClip(temp_in.name)
-            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as temp_out:
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as temp_out:
                 video.write_videofile(
                     temp_out.name,
                     bitrate=f"{self.quality*1000}k",
@@ -421,13 +421,28 @@ class FileCompressor:
                 except PermissionError:
                     pass
 
-    def compress(self, file: bytes, mime_type: str) -> bytes:
+    def compress(self, file: bytes, mime_type: str, filename: str) -> bytes:
         if mime_type.startswith("image/"):
             return self.compress_image(file)
         elif mime_type.startswith("audio/"):
             return self.compress_audio(file)
         elif mime_type.startswith("video/"):
-            return self.compress_video(file)
+            allowed_extensions = [
+                ".mp4",
+                ".mov",
+                ".avi",
+                ".mkv",
+                ".flv",
+                ".wmv",
+                ".webm",
+            ]
+            file_ext = os.path.splitext(filename)[1].lower()
+            if not file_ext.startswith("."):
+                file_ext = f".{file_ext}"
+
+            if not file_ext in allowed_extensions:
+                raise ValueError(400, "Unsupported video format")
+            return self.compress_video(file, file_ext)
         elif mime_type == "application/pdf":
             return self.compress_pdf(file)
         else:
