@@ -61,4 +61,6 @@ Open http://localhost:8000/docs in your browser to explore the API endpoints.
 | `/api/v1/compress`            | POST   | Request file compression  |
 | `/api/v1/download/{fileId}`   | POST   | Download converted file   |
 
+
+
 **Built with ❤️ by Olatoyese Faruq**
