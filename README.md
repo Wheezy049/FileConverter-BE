@@ -49,13 +49,16 @@ uvicorn app.main:app --reload
 ```
 
 5. Access API docs
+```bash
 Open http://localhost:8000/docs in your browser to explore the API endpoints.
+```
 
 ## 🔄 API Overview
 
-Endpoint                    Method	Description
-/api/v1/convert/png-to-pdf 	POST	Request file conversion
-/api/v1/compress	        POST	Request file compression
-/api/v1/download/{fileId}	POST	Download converted file
+| Endpoint                     | Method | Description               |
+|------------------------------|--------|---------------------------|
+| `/api/v1/convert/png-to-pdf` | POST   | Request file conversion   |
+| `/api/v1/compress`            | POST   | Request file compression  |
+| `/api/v1/download/{fileId}`   | POST   | Download converted file   |
 
 **Built with ❤️ by Olatoyese Faruq**
