@@ -25,6 +25,8 @@ def allConvert():
     return {
         "message": "All conversion endpoints are available",
         "endpoints": [
+            "/api/v1/convert/png-to-jpeg",
+            "/api/v1/convert/jpeg-to-png",
             "/api/v1/convert/png-to-pdf",
             "/api/v1/convert/jpg-to-pdf",
             "/api/v1/convert/image-to-pdf",

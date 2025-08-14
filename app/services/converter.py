@@ -126,7 +126,8 @@ class FileConverter:
                 image = image.convert("RGB")
 
             jpg_buffer = io.BytesIO()
-            image.save(jpg_buffer, format="jpeg")
+            image.save(jpg_buffer, format="JPEG")
+            return jpg_buffer.getvalue()
         except Exception as e:
             raise Exception(f"Error converting png to jpeg: {str(e)}")
         
@@ -139,7 +140,8 @@ class FileConverter:
                 image = image.convert("RGB")
 
             png_buffer = io.BytesIO()
-            image.save(png_buffer, format="png")
+            image.save(png_buffer, format="PNG")
+            return png_buffer.getvalue()
         except Exception as e:
             raise Exception(f"Error converting jpeg to png: {str(e)}")   
 

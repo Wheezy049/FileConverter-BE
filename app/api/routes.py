@@ -589,7 +589,7 @@ async def jpeg_to_png(file: UploadFile = File(...)):
         output_filename = f"{original_filename}.png"
         file_id = str(uuid.uuid4())
         file_content = await file.read()
-        png_content = converter.convert_png_to_jpeg(file_content)
+        png_content = converter.convert_jpeg_to_png(file_content)
         Temp_Storage[file_id] = {
             "content": png_content,
             "media_type": "image/png",
