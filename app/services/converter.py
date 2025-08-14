@@ -116,6 +116,33 @@ class FileConverter:
             return pdf_bytes
         except Exception as e:
             raise Exception(f"Error converting SVG to PDF: {str(e)}")
+        
+    #png to jpeg
+    def convert_png_to_jpeg(self, png_content: bytes) -> bytes: 
+        try:
+            image = Image.open(io.BytesIO(png_content))
+
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+
+            jpg_buffer = io.BytesIO()
+            image.save(jpg_buffer, format="jpeg")
+        except Exception as e:
+            raise Exception(f"Error converting png to jpeg: {str(e)}")
+        
+    #jpeg to png
+    def convert_jpeg_to_png(self, jpg_content: bytes) -> bytes:
+        try:
+            image = Image.open(io.BytesIO(jpg_content))
+
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+
+            png_buffer = io.BytesIO()
+            image.save(png_buffer, format="png")
+        except Exception as e:
+            raise Exception(f"Error converting jpeg to png: {str(e)}")   
+
 
     # pdf to png
     def convert_pdf_to_png(self, pdf_content: bytes) -> list[bytes]:

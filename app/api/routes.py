@@ -536,7 +536,7 @@ def svg_to_jpg(file: UploadFile = File(...)):
         jpg_content = converter.convert_svg_to_jpg(svg_content)
         Temp_Storage[file_id] = {
             "content": jpg_content,
-            "media_type": "application/zip",
+            "media_type": "image/jpeg",
             "filename": f"{output_filename}",
         }
 
@@ -550,13 +550,72 @@ def svg_to_jpg(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
 
 
+# png to jpeg
+@router.post("/convert/png-to-jpeg")
+async def png_to_jpeg(file: UploadFile = File(...)):
+    if file.content_type != "image/png":
+        raise HTTPException(status_code=400, detail="File must be a png image")
+
+    try:
+        original_filename = os.path.splitext(file.filename)[0]
+        output_filename = f"{original_filename}.jpg"
+        file_content = await file.read()
+        file_id = str(uuid.uuid4())
+        jpg_content = converter.convert_png_to_jpeg(file_content)
+        Temp_Storage[file_id] = {
+            "content": jpg_content,
+            "media_type": "image/jpeg",
+            "filename": f"{output_filename}",
+        }
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+
+
+# jpeg to png
+@router.post("/convert/jpeg-to-png")
+async def jpeg_to_png(file: UploadFile = File(...)):
+
+    if file.content_type != "image/jpeg":
+        raise HTTPException(status_code=400, detail=f"File must be JPG image")
+
+    try:
+        original_filename = os.path.splitext(file.filename)[0]
+        output_filename = f"{original_filename}.png"
+        file_id = str(uuid.uuid4())
+        file_content = await file.read()
+        png_content = converter.convert_png_to_jpeg(file_content)
+        Temp_Storage[file_id] = {
+            "content": png_content,
+            "media_type": "image/png",
+            "filename": f"{output_filename}",
+        }
+        return {
+            "file_id": file_id,
+            "filename": output_filename,
+            "message": "File Converted successfully",
+            "download_url": f"/api/v1/download/{file_id}",
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+
+
 # mp4 to mp3
 @router.post("/convert/mp4-to-mp3")
 async def mp4_to_mp3(file: UploadFile = File(...)):
     allowed_extensions = [".mp4", ".mov", ".avi", ".mkv", ".flv", ".wmv", ".webm"]
     file_ext = os.path.splitext(file.filename)[1].lower()
     if file_ext not in allowed_extensions:
-        raise HTTPException(status_code=400, detail=f"Only video files with extensions {allowed_extensions} are supported.")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only video files with extensions {allowed_extensions} are supported.",
+        )
 
     try:
         file_content = await file.read()
